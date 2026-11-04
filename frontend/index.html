@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diony - Punto de Venta e Inventario</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'diony-dark': '#0b2b26',
+                        'diony-main': '#164e43',
+                        'diony-light': '#2f8574',
+                        'diony-accent': '#a3e635',
+                        'diony-bg': '#f0fdf4'
+                    }
+                }
+            }
+        }
+    </script>
+        <link rel="stylesheet" href="styles.css"> <!-- 👈 LÍNEA AGREGADA AQUÍ -->
+
+    <style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #modal-recibo, #modal-recibo *,
+            #reporte-imprimible, #reporte-imprimible * {
+                visibility: visible;
+            }
+            #modal-recibo {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100% !important;
+                background: white !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            #modal-recibo button {
+                display: none !important;
+            }
+            #reporte-imprimible {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100% !important;
+                background: white !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-diony-bg text-gray-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Encabezado / Navegación -->
+    <header class="bg-diony-dark text-white p-4 shadow-md flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-diony-main rounded-full flex items-center justify-center font-bold text-diony-accent border border-diony-light">
+                D
+            </div>
+            <h1 class="text-2xl font-bold tracking-wide">Diony</h1>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="cambiarVista('pos')" class="px-3 py-2 bg-diony-main hover:bg-diony-light rounded-lg font-semibold text-sm transition">🛒 Punto de Venta</button>
+            <button onclick="cambiarVista('inventario')" class="px-3 py-2 bg-diony-main hover:bg-diony-light rounded-lg font-semibold text-sm transition">📦 Inventario</button>
+            <button onclick="mostrarModalCierre()" class="px-3 py-2 bg-diony-main hover:bg-diony-light rounded-lg font-semibold text-sm transition">🔐 Cierre de Caja</button>
+            <button onclick="mostrarModalPerdidas()" class="px-3 py-2 bg-diony-main hover:bg-diony-light rounded-lg font-semibold text-sm transition">⚠️ Registrar Pérdida</button>
+            <button onclick="cambiarVista('reportes')" class="px-3 py-2 bg-diony-main hover:bg-diony-light rounded-lg font-semibold text-sm transition">📊 Reportes</button>
+        </div>
+    </header>
+
+    <!-- VISTA 1: PUNTO DE VENTA (POS) -->
+    <main id="vista-pos" class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
+        <section class="md:col-span-2 space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-emerald-100 flex gap-4">
+                <input type="text" id="buscar-producto" placeholder="🔍 Buscar por nombre o código de barras..." 
+                       class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-diony-main" autofocus>
+            </div>
+            <div id="grid-productos" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <!-- Productos -->
+            </div>
+        </section>
+
+        <section class="bg-white p-6 rounded-xl shadow-md border border-emerald-100 flex flex-col justify-between">
+            <div>
+                <h2 class="text-xl font-bold text-diony-dark border-b pb-3 mb-4">Detalle de la Venta</h2>
+                <div id="items-carrito" class="space-y-3 max-h-48 overflow-y-auto pr-2">
+                    <p class="text-gray-400 text-center py-6">El carrito está vacío</p>
+                </div>
+            </div>
+
+            <div class="border-t pt-3 mt-2 space-y-2">
+                <div class="flex justify-between text-xl font-bold text-diony-dark">
+                    <span>Total a cobrar:</span>
+                    <span id="total-venta">Bs. 0.00</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Método de Pago:</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="seleccionarMetodo('efectivo')" id="btn-efectivo" class="py-2 border-2 border-diony-main bg-diony-main text-white font-bold rounded-lg text-xs">💵 Efectivo</button>
+                        <button onclick="seleccionarMetodo('qr')" id="btn-qr" class="py-2 border-2 border-diony-main text-diony-main font-bold rounded-lg text-xs">📲 QR</button>
+                    </div>
+                </div>
+
+                <!-- CALCULADORA DE CAMBIO (Efectivo) -->
+                <div id="seccion-efectivo" class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 space-y-1">
+                    <label class="block text-[11px] font-bold text-diony-dark">Efectivo Recibido (Bs):</label>
+                    <input type="number" step="0.01" id="input-efectivo-recibido" oninput="calcularCambio()" placeholder="Ej. 50.00" 
+                           class="w-full p-1.5 border border-emerald-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-diony-main">
+                    
+                    <div class="flex justify-between items-center text-xs pt-1">
+                        <span class="font-bold text-gray-700">Cambio a Devolver:</span>
+                        <span id="cambio-devolver" class="font-extrabold text-red-600 text-sm">Bs. 0.00</span>
+                    </div>
+                </div>
+
+                <button onclick="completarVenta()" class="w-full py-2.5 bg-diony-light hover:bg-diony-main text-white font-bold text-base rounded-xl shadow-lg transition">
+                    Confirmar y Cobrar
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- VISTA 2: INVENTARIO -->
+    <main id="vista-inventario" class="flex-1 p-6 hidden">
+        <div class="bg-white p-6 rounded-xl shadow-md border border-emerald-100">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-diony-dark">Gestión de Inventario</h2>
+                <button onclick="mostrarModalAgregar()" class="px-4 py-2 bg-diony-main hover:bg-diony-light text-white font-semibold rounded-lg text-sm">
+                    + Registrar Nuevo Producto
+                </button>
+            </div>
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-diony-dark text-white text-sm">
+                        <th class="p-3">Código</th>
+                        <th class="p-3">Producto</th>
+                        <th class="p-3">Categoría</th>
+                        <th class="p-3">P. Compra</th>
+                        <th class="p-3">P. Venta</th>
+                        <th class="p-3">Stock</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-inventario"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- VISTA 3: REPORTES -->
+    <main id="vista-reportes" class="flex-1 p-6 hidden">
+        <div id="reporte-imprimible" class="max-w-5xl mx-auto space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h2 class="text-2xl font-bold text-diony-dark">Resumen de Ventas y Ganancias</h2>
+                
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button onclick="filtrarReporte('hoy')" id="btn-rep-hoy" class="px-3 py-1.5 bg-diony-main text-white font-bold rounded-lg text-xs transition">Hoy</button>
+                    <button onclick="filtrarReporte('ayer')" id="btn-rep-ayer" class="px-3 py-1.5 bg-gray-200 text-gray-700 font-bold rounded-lg text-xs hover:bg-gray-300 transition">Ayer</button>
+                    <button onclick="filtrarReporte('todo')" id="btn-rep-todo" class="px-3 py-1.5 bg-gray-200 text-gray-700 font-bold rounded-lg text-xs hover:bg-gray-300 transition">Histórico</button>
+
+                    <div class="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-300 text-xs">
+                        <span class="font-bold text-gray-600 px-1">Día:</span>
+                        <input type="date" id="filtro-fecha-dia" onchange="filtrarPorDiaEspecifico()" class="bg-transparent focus:outline-none font-semibold">
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-300 text-xs">
+                        <span class="font-bold text-gray-600 px-1">Mes:</span>
+                        <input type="month" id="filtro-fecha-mes" onchange="filtrarPorMesEspecifico()" class="bg-transparent focus:outline-none font-semibold">
+                    </div>
+
+                    <button onclick="imprimirReportePDF()" class="px-3 py-1.5 bg-diony-accent text-diony-dark font-bold rounded-lg text-xs hover:bg-lime-400 transition shadow-sm">
+                        📄 Imprimir PDF
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-emerald-600">
+                    <p class="text-xs font-bold text-gray-500 uppercase" id="label-titulo-ventas">Ventas Totales (Hoy)</p>
+                    <h3 id="reporte-ventas-totales" class="text-2xl font-black text-diony-dark mt-1">Bs. 0.00</h3>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500">
+                    <p class="text-xs font-bold text-gray-500 uppercase">Desglose por Pago</p>
+                    <p class="text-sm font-semibold text-gray-700 mt-1">💵 Efectivo: <span id="reporte-efectivo" class="font-bold">Bs. 0.00</span></p>
+                    <p class="text-sm font-semibold text-gray-700">📲 QR: <span id="reporte-qr" class="font-bold">Bs. 0.00</span></p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-diony-accent">
+                    <p class="text-xs font-bold text-gray-500 uppercase">Ganancia Neta Calculada</p>
+                    <h3 id="reporte-ganancia-neta" class="text-2xl font-black text-diony-main mt-1">Bs. 0.00</h3>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-md border border-emerald-100">
+                <h3 class="text-lg font-bold text-diony-dark mb-4">Detalle de Transacciones del Período</h3>
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-diony-dark text-white text-sm">
+                            <th class="p-3">ID Venta</th>
+                            <th class="p-3">Fecha / Hora</th>
+                            <th class="p-3">Método de Pago</th>
+                            <th class="p-3">Total Cobrado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-reporteVentas"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODALES -->
+    <!-- Modal Nuevo Producto -->
+    <div id="modal-producto" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-emerald-100">
+            <h3 class="text-xl font-bold text-diony-dark mb-4">Registrar Nueva Bebida / Producto</h3>
+            <form id="form-nuevo-producto" onsubmit="guardarNuevoProducto(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Nombre del Producto:</label>
+                    <input type="text" id="nuevo-nombre" required class="w-full p-2 border rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700">Categoría:</label>
+                        <input type="text" id="nuevo-categoria" placeholder="Ej. Cervezas" class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700">Código de Barras:</label>
+                        <input type="text" id="nuevo-codigo" placeholder="Opcional" class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700">Precio Compra (Bs):</label>
+                        <input type="number" step="0.01" id="nuevo-pcompra" required class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700">Precio Venta (Bs):</label>
+                        <input type="number" step="0.01" id="nuevo-pventa" required class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700">Stock Inicial:</label>
+                        <input type="number" id="nuevo-stock" required class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700">Stock Mínimo:</label>
+                        <input type="number" id="nuevo-minimo" value="5" class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Emoji / Icono:</label>
+                    <input type="text" id="nuevo-imagen" value="🍺" class="w-full p-2 border rounded-lg text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="cerrarModalAgregar()" class="px-4 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg text-sm">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-diony-main text-white font-semibold rounded-lg text-sm hover:bg-diony-light">Guardar Producto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Cierre de Caja -->
+    <div id="modal-cierre" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-emerald-100">
+            <h3 class="text-xl font-bold text-diony-dark mb-2">Cierre de Turno / Caja</h3>
+            <p class="text-xs text-gray-500 mb-4">Ingresa los montos físicos contados al finalizar el turno.</p>
+            <form id="form-cierre" onsubmit="enviarCierreCaja(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Efectivo contado (Bs):</label>
+                    <input type="number" step="0.01" id="cierre-efectivo" required class="w-full p-2 border rounded-lg text-sm" placeholder="Ej. 350.00">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Total recibido por QR (Bs):</label>
+                    <input type="number" step="0.01" id="cierre-qr" required class="w-full p-2 border rounded-lg text-sm" placeholder="Ej. 150.00">
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="cerrarModalCierre()" class="px-4 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg text-sm">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-diony-main text-white font-semibold rounded-lg text-sm hover:bg-diony-light">Registrar Cierre</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Pérdidas -->
+    <div id="modal-perdidas" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-emerald-100">
+            <h3 class="text-xl font-bold text-diony-dark mb-2">Registrar Pérdida de Bebida</h3>
+            <p class="text-xs text-gray-500 mb-4">Registra productos vencidos o dañados para descontarlos del inventario.</p>
+            <form id="form-perdida" onsubmit="enviarPerdida(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Seleccionar Producto:</label>
+                    <select id="perdida-producto-id" required class="w-full p-2 border rounded-lg text-sm bg-white"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Cantidad dañada / vencida:</label>
+                    <input type="number" id="perdida-cantidad" min="1" required class="w-full p-2 border rounded-lg text-sm" placeholder="Ej. 2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Motivo:</label>
+                    <input type="text" id="perdida-motivo" required class="w-full p-2 border rounded-lg text-sm" placeholder="Ej. Botella rota">
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="cerrarModalPerdidas()" class="px-4 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg text-sm">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-diony-main text-white font-semibold rounded-lg text-sm hover:bg-diony-light">Guardar Pérdida</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Recibo / Ticket -->
+    <div id="modal-recibo" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-emerald-100 font-mono text-sm">
+            <div class="text-center border-b pb-3 mb-3">
+                <h2 class="text-2xl font-bold font-sans text-diony-dark">DIONY</h2>
+                <p class="text-xs text-gray-500 font-sans">Punto de Venta e Inventario</p>
+                <p class="text-xs text-gray-400 mt-1" id="recibo-fecha"></p>
+                <p class="text-xs font-bold text-diony-main mt-1" id="recibo-id"></p>
+            </div>
+
+            <div class="space-y-2 mb-4">
+                <div class="flex justify-between font-bold border-b pb-1 text-xs text-gray-600">
+                    <span>Cant / Producto</span>
+                    <span>Subtotal</span>
+                </div>
+                <div id="recibo-items" class="space-y-1 text-xs"></div>
+            </div>
+
+            <div class="border-t pt-3 space-y-1 text-right">
+                <p class="text-xs text-gray-600">Método de Pago: <span id="recibo-metodo" class="font-bold uppercase text-gray-800"></span></p>
+                <p class="text-base font-bold text-diony-dark">TOTAL: <span id="recibo-total" class="text-lg text-diony-main"></span></p>
+            </div>
+
+            <div class="text-center my-4 border-t pt-2">
+                <p class="text-xs text-gray-500 italic">¡Gracias por su compra!</p>
+            </div>
+
+            <div class="flex gap-2 pt-2 font-sans">
+                <button onclick="imprimirRecibo()" class="flex-1 py-2 bg-diony-main text-white font-bold rounded-lg text-xs hover:bg-diony-light">🖨️ Imprimir / PDF</button>
+                <button onclick="cerrarModalRecibo()" class="px-4 py-2 bg-gray-300 text-gray-700 font-bold rounded-lg text-xs">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE QR FLOTANTE CENTRADO (Actualizado con extensión .jpg) -->
+    <div id="modal-qr" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-purple-100 text-center space-y-4">
+            <div class="border-b pb-2">
+                <h3 class="text-xl font-bold text-purple-900">Pago por QR (Yape)</h3>
+                <p class="text-xs text-gray-500">Escanea el código para completar la transferencia</p>
+            </div>
+
+            <div class="bg-purple-50 p-3 rounded-xl border border-purple-200 inline-block">
+                <img src="qr-yape.jpg" alt="QR Yape Juan Carlos Chino" class="w-56 h-56 mx-auto object-contain">
+            </div>
+<p class="text-xs font-bold text-gray-700">Titular: <span class="text-purple-800">ROSMERY MAMANI RAMOS</span></p>
+            <div>
+               
+
+            <button onclick="cerrarModalQr()" class="w-full py-2.5 bg-diony-main text-white font-bold rounded-xl text-sm hover:bg-diony-light transition">
+                Cerrar QR
+            </button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

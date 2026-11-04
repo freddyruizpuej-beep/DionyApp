@@ -1,0 +1,4 @@
+﻿node_modules/
+diony.db
+.env
+.DS_Store

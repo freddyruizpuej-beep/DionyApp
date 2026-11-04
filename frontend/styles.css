@@ -1,0 +1,8 @@
+/* Estilos para el scrollbar dentro del carrito */
+#items-carrito::-webkit-scrollbar {
+    width: 6px;
+}
+#items-carrito::-webkit-scrollbar-thumb {
+    background-color: #2f8574;
+    border-radius: 4px;
+}
