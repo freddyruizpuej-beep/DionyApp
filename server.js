@@ -9,10 +9,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'frontend')));
 
 // Conexión a SQLite
-const db = new sqlite3.Database('./diony.db', (err) => {
-    if (err) console.error('Error al conectar con SQLite:', err.message);
-    else console.log('Conectado a la base de datos SQLite (diony.db)');
-});
+const dbPath = process.env.DATABASE_PATH || './diony.db';
+const db = new sqlite3.Database(dbPath, (err) => {
 
 // Inicializar Tablas
 db.serialize(() => {
