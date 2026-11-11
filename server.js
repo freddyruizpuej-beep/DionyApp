@@ -211,9 +211,9 @@ app.get('/api/reportes', (req, res) => {
                     ganancia_neta: resGanancias.ganancia_neta || 0,
                     historial: resHistorial || []
                 });
-            });
-        });
-    });
+});
+});
+});
 });
 
 app.listen(PORT, () => {
