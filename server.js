@@ -3,7 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // <--- Cambio aplicado aquí
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'frontend')));
@@ -11,6 +11,9 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 // Conexión a SQLite
 const dbPath = process.env.DATABASE_PATH || './diony.db';
 const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) console.error('Error al conectar con SQLite:', err.message);
+    else console.log('Conectado a la base de datos SQLite');
+});
 
 // Inicializar Tablas
 db.serialize(() => {
@@ -76,12 +79,12 @@ app.post('/api/productos', (req, res) => {
         res.json({ success: true, id: this.lastID });
     });
 });
+
 // Registrar venta normal con la fecha actual del sistema (CON CONTROL DE STOCK)
 app.post('/api/ventas', (req, res) => {
     const { total, metodo_pago, vendedor_id, detalles } = req.body;
 
     db.serialize(() => {
-        // 1. Iniciamos una transacción (si algo falla, se deshace todo)
         db.run("BEGIN TRANSACTION");
 
         db.run(`INSERT INTO ventas (total, metodo_pago, vendedor_id) VALUES (?, ?, ?)`, [total, metodo_pago, vendedor_id || 1], function(err) {
@@ -93,17 +96,11 @@ app.post('/api/ventas', (req, res) => {
             let errorStock = false;
 
             const stmtDetalle = db.prepare(`INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, subtotal) VALUES (?, ?, ?, ?)`);
-            
-            // 2. Agregamos la condición "AND stock_actual >= ?" para evitar stock negativo
             const stmtStock = db.prepare(`UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ? AND stock_actual >= ?`);
 
             detalles.forEach(item => {
-                // Insertamos el detalle de la venta
                 stmtDetalle.run(ventaId, item.id, item.cantidad, item.subtotal);
-                
-                // Intentamos restar el stock de forma segura
-                stmtStock.run(item.cantidad, item.id, item.cantidad, function(err) {
-                    // Si 'this.changes' es 0, significa que el UPDATE no afectó a ninguna fila (no había stock suficiente)
+                stmtStock.run(item.cantidad, item.id, item.cantidad, function() {
                     if (this.changes === 0) {
                         errorStock = true; 
                     }
@@ -112,20 +109,18 @@ app.post('/api/ventas', (req, res) => {
 
             stmtDetalle.finalize();
             
-            // 3. Cerramos el statement de stock y verificamos si hubo errores
             stmtStock.finalize(() => {
                 if (errorStock) {
-                    db.run("ROLLBACK"); // Cancelamos toda la venta
+                    db.run("ROLLBACK");
                     return res.status(400).json({ success: false, error: 'Stock insuficiente para uno o más productos. Venta cancelada.' });
                 } else {
-                    db.run("COMMIT"); // Guardamos los cambios definitivamente
+                    db.run("COMMIT");
                     return res.json({ success: true, ventaId, message: 'Venta registrada con éxito' });
                 }
             });
         });
     });
 });
-
 
 // Registrar pérdida
 app.post('/api/perdidas', (req, res) => {
@@ -152,9 +147,8 @@ app.post('/api/cierre-caja', (req, res) => {
 // Reportes con soporte para Día exacto, Mes exacto o Filtros rápidos (SEGURO)
 app.get('/api/reportes', (req, res) => {
     const { filtro, dia, mes } = req.query;
-    
     let condFecha = '';
-    let params = []; // Arreglo para guardar los parámetros de forma segura
+    let params = []; 
 
     if (dia) {
         condFecha = `WHERE date(v.fecha, 'localtime') = ?`;
@@ -194,7 +188,6 @@ app.get('/api/reportes', (req, res) => {
         ORDER BY v.fecha DESC
     `;
 
-    // IMPORTANTE: Aquí cambiamos el [] por "params" en las tres consultas
     db.get(queryVentas, params, (err, resVentas) => {
         if (err) return res.status(500).json({ error: err.message });
         
@@ -211,9 +204,9 @@ app.get('/api/reportes', (req, res) => {
                     ganancia_neta: resGanancias.ganancia_neta || 0,
                     historial: resHistorial || []
                 });
-});
-});
-});
+            });
+        });
+    });
 });
 
 app.listen(PORT, () => {
